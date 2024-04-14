@@ -24,26 +24,30 @@ import spacy
 # Plotting tools
 import pyLDAvis
 import pyLDAvis.gensim  # don't skip this
-#
-# conn = sqlite3.connect('homework.db')
-# c = conn.cursor()
-#
-# # 执行SQL查询，选择abstract和year列
-# c.execute('SELECT abstract, year FROM article')
-#
-# # 读取所有结果
-# results = c.fetchall()
-#
-# # 用字典来分组数据，键为年份，值为对应年份的abstract列表
-# grouped_by_year = {}
-# for abstract, year in results:
-#     if year in grouped_by_year:
-#         grouped_by_year[year].append(str(abstract))
-#     else:
-#         grouped_by_year[year] = [abstract]
-#
-# years = sorted(list(grouped_by_year.keys()))
 
+from sumy.parsers.plaintext import PlaintextParser
+from sumy.nlp.tokenizers import Tokenizer
+from sumy.summarizers.lsa import LsaSummarizer
+#
+conn = sqlite3.connect('homework.db')
+c = conn.cursor()
+
+# 执行SQL查询，选择abstract和year列
+c.execute('SELECT abstract, year FROM article')
+
+# 读取所有结果
+results = c.fetchall()
+
+# 用字典来分组数据，键为年份，值为对应年份的abstract列表
+grouped_by_year = {}
+for abstract, year in results:
+    if year in grouped_by_year:
+        grouped_by_year[year].append(str(abstract))
+    else:
+        grouped_by_year[year] = [abstract]
+
+years = sorted(list(grouped_by_year.keys()))
+print(grouped_by_year[2024])
 
 def LDA_topic_modeling(abstracts):
     def sent_to_words(sentences):
@@ -104,3 +108,23 @@ def LDA_topic_modeling(abstracts):
     vis = pyLDAvis.gensim.prepare(lda_model, corpus, id2word)
     pyLDAvis.enable_notebook()
     return pyLDAvis.display(vis)
+
+
+def text_summarization(input_text):
+
+    # Parse the input text
+    parser = PlaintextParser.from_string(input_text, Tokenizer("english"))
+
+    # Create an LSA summarizer
+    summarizer = LsaSummarizer()
+
+    # Generate the summary
+    summary = summarizer(parser.document, sentences_count=3)  # You can adjust the number of sentences in the summary
+
+    # Output the summary
+    print("\nSummary:")
+    for sentence in summary:
+        print(sentence)
+
+
+
