@@ -23,41 +23,59 @@ def get_abstracts(url, year, conn):
     # 解析HTML内容
     doc_html = html.fromstring(html_string)
 
-    # 创建一个字典来存储标题和摘要
+    # Create a dictionary to store the title and summary
     # abstracts = {}
 
     total_page_num = doc_html.cssselect('label.of-total-pages')[0].text_content().split(" ")[-1]
 
-    # 遍历每个class为article-overview的article元素
+    # Iterate over each article element with class article-overview
     articles = doc_html.cssselect('article.article-overview')
     if len(articles) == 0:
         print('No articles found')
         return -1
     for article in articles:
-        # 获取标题（即<a>标签的文本内容）
-
+        # Get the title (i.e. the text content of the <a> tag)
         title_link = article.cssselect('h1.heading-title a')
         if not title_link:
             print('No title found')
             return -1
-
         if title_link:
-            article_title = title_link[0].text_content().strip()  # 取第一个a标签的文本，并去除空白字符
-            # print(article_title)
-            # 在同一个article中找到class为abstract-content selected的div
+            # Take the text of the first a tag and remove the whitespace characters
+            article_title = title_link[0].text_content().strip()
+
+            # Check if the article is retracted
+            if 'retract' in article_title.lower():
+                print(f'{article_title} is retracted, skipping...')
+                articles.remove(article)
+                continue
+
+            # Check if the article title is in the database
+            c.execute("SELECT * FROM article WHERE title = ?", (article_title,))
+            if c.fetchone():
+                print(f'{article_title} already exists in the database, skipping...')
+                articles.remove(article)
+                continue
+
+            # Find the div with class abstract-content selected in the same article.
             abstract_div = article.cssselect('div.abstract-content.selected')
             if abstract_div:
-                # 检查是否有多个<p>元素
+                # Check for multiple <p> elements
                 paragraphs = abstract_div[0].cssselect('p')
                 if paragraphs:
-                    # 合并所有p元素的文本，如果有多个，用换行符连接它们
+                    # Merge the text of all p elements, and if there are more than one, join them with newlines.
                     cleaned_abstract = (re.sub(r'\s+', ' ', p.text_content().strip()) for p in paragraphs)
                     abstract_text = '\n'.join(p for p in cleaned_abstract)
-                    # # 存储标题和摘要到字典中
-                    # abstracts[article_title] = abstract_text
 
-                    # Insert data 
-                    c.execute("INSERT INTO article (title, abstract, year) VALUES (?, ?, ?)", (article_title, abstract_text, year))
+                    # Insert data. If the database is locked then retry
+                    attempt = 0
+                    while attempt < 10:
+                        try:
+                            c.execute("INSERT INTO article (title, abstract, year) VALUES (?, ?, ?)",
+                                      (article_title, abstract_text, year))
+                            break
+                        except sqlite3.OperationalError:
+                            print('Database is locked, retrying...')
+                            attempt += 1
 
     # Commit to save the changes
     conn.commit()
@@ -65,12 +83,6 @@ def get_abstracts(url, year, conn):
     # return abstracts
     return total_page_num
 
-
-# abstract_dict = get_abstracts(htmlString)
-# print(abstract_dict)
-# for key, value in abstract_dict.items():
-#     print(f"{key}: {value}")
-# print(len(abstract_dict))
 
 def fetch_year_data(year):
     # connect to the database
